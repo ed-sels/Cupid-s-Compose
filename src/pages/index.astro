@@ -85,44 +85,57 @@ if (!isLoading) isLoading = false;
       Cupid's Compose
     </h1>
 
-    <div class="card form-card">
-      <h2 class="card-title">Generate Your Love Note</h2>
-      <form method="POST" class="form" id="letterForm">
-        <div class="form-group">
-          <label for="recipient">Recipient's Name</label>
-          <input type="text" id="recipient" name="recipient" required />
-        </div>
+    <div class="card-container">
+      <div class="card form-card">
+        <h2 class="card-title">Generate Your Love Note</h2>
+        <form method="POST" class="form" id="letterForm">
+          <div class="form-group">
+            <label for="recipient">Recipient's Name</label>
+            <input type="text" id="recipient" name="recipient" required />
+          </div>
 
-        <div class="form-group">
-          <label for="relationship">Your Relationship</label>
-          <select id="relationship" name="relationship" required>
-            <option value="" disabled selected>Select relationship</option>
-            <option value="partner">Partner</option>
-            <option value="crush">Crush</option>
-            <option value="spouse">Spouse</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label for="relationship">Your Relationship</label>
+            <select id="relationship" name="relationship" required>
+              <option value="" disabled selected>Select relationship</option>
+              <option value="partner">Partner</option>
+              <option value="crush">Crush</option>
+              <option value="spouse">Spouse</option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label for="tone">Tone</label>
-          <select id="tone" name="tone" required>
-            <option value="" disabled selected>Select tone</option>
-            <option value="romantic">Romantic</option>
-            <option value="playful">Playful</option>
-            <option value="poetic">Poetic</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label for="tone">Tone</label>
+            <select id="tone" name="tone" required>
+              <option value="" disabled selected>Select tone</option>
+              <option value="romantic">Romantic</option>
+              <option value="playful">Playful</option>
+              <option value="poetic">Poetic</option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label for="details">Special Details</label>
-          <textarea id="details" name="details" placeholder="Include any special memories or details..."></textarea>
-        </div>
+          <div class="form-group">
+            <label for="details">Special Details</label>
+            <textarea id="details" name="details" placeholder="Include any special memories or details..."></textarea>
+          </div>
 
-        <button type="submit" class="submit-btn" disabled={isLoading}>
-          <span class="btn-text">{isLoading ? 'Generating...' : 'Generate Love Note'}</span>
-          <span class="btn-icon">💌</span>
-        </button>
-      </form>
+          <button type="submit" class="submit-btn" disabled={isLoading}>
+            <span class="btn-text">{isLoading ? 'Generating...' : 'Generate Love Note'}</span>
+            <span class="btn-icon">💌</span>
+          </button>
+        </form>
+      </div>
+
+      <div class="card letter-card">
+        <h2 class="card-title">Your Love Note</h2>
+        <div class="letter-content">
+          <button class="copy-btn" aria-label="Copy letter to clipboard">
+            <span class="copy-icon">📋</span>
+            <span class="copy-text">Copy</span>
+          </button>
+          <p>{letter}</p>
+        </div>
+      </div>
     </div>
 
     {error && (
@@ -130,18 +143,6 @@ if (!isLoading) isLoading = false;
         <span>{error}</span>
       </div>
     )}
-
-
-    <div class="card letter-card">
-      <h2 class="card-title">Your Love Note</h2>
-      <div class="letter-content">
-        <button class="copy-btn" aria-label="Copy letter to clipboard">
-          <span class="copy-icon">📋</span>
-          <span class="copy-text">Copy</span>
-        </button>
-        <p>{letter}</p>
-      </div>
-    </div>
   </main>
 
   <script>
@@ -225,7 +226,7 @@ if (!isLoading) isLoading = false;
             if (submitButton) {
               submitButton.disabled = false;
               if (submitButton.querySelector('.btn-text')) {
-                submitButton.querySelector('.btn-text')!.textContent = 'Generate Love Letter';
+                submitButton.querySelector('.btn-text')!.textContent = 'Generate Love Note';
               }
             }
           }
@@ -283,7 +284,7 @@ if (!isLoading) isLoading = false;
   }
 
   .container {
-    max-width: 800px;
+    max-width: 1200px; /* Increased to accommodate side-by-side layout */
     margin: 0 auto;
     padding: 2rem;
     font-family: 'Segoe UI', system-ui, sans-serif;
@@ -304,6 +305,11 @@ if (!isLoading) isLoading = false;
     animation: pulse 1.5s infinite;
   }
 
+  .card-container {
+    display: flex;
+    gap: 2rem; /* Space between form and letter card */
+  }
+
   .card {
     background: #ade1eb;
     border-radius: 16px;
@@ -313,6 +319,7 @@ if (!isLoading) isLoading = false;
     backdrop-filter: blur(8px);
     transform-origin: top;
     animation: fadeInUp 0.6s ease-out;
+    flex: 1; /* Ensure both cards take equal space */
   }
 
   .form-card {
@@ -429,7 +436,7 @@ if (!isLoading) isLoading = false;
     line-height: 1.8;
     color: #2c3e50;
     padding: 1.5rem;
-    background: linear-gradient(0deg, #fff9f0 0%, #ffffff 100%);
+    background: linear-gradient(0deg, 	#ff2929 0%, #ffffff 100%);
     border-radius: 8px;
     position: relative;
     white-space: pre-wrap;
@@ -529,6 +536,10 @@ if (!isLoading) isLoading = false;
 
     .card {
       padding: 1.5rem;
+    }
+
+    .card-container {
+      flex-direction: column; /* Stack cards vertically on small screens */
     }
   }
 
