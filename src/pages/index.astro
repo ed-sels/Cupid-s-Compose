@@ -1,0 +1,582 @@
+---
+import Layout from '../layouts/Layout.astro';
+import '@/styles/globals.css';
+import { z } from 'zod';
+
+const FormSchema = z.object({
+  recipient: z.string().min(1, 'Recipient name is required').max(50, 'Recipient name too long'),
+  relationship: z.enum(['partner', 'crush', 'spouse'], {
+    errorMap: () => ({ message: 'Please select a valid relationship' }),
+  }),
+  tone: z.enum(['romantic', 'playful', 'poetic'], {
+    errorMap: () => ({ message: 'Please select a valid tone' }),
+  }),
+  details: z.string().max(500, 'Details too long').optional(),
+});
+
+let letter = '';
+let isLoading = false;
+let error = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    isLoading = true;
+    
+    const rawData = await Astro.request.text();
+    const data = JSON.parse(rawData);
+
+    const validatedData = FormSchema.safeParse(data);
+    
+    if (!validatedData.success) {
+      throw new Error(validatedData.error.errors[0].message);
+    }
+
+    const response = await fetch(`${Astro.url.origin}/api/generate.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(validatedData.data)
+    });
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      throw new Error(responseData.error || `API request failed with status ${response.status}`);
+    }
+
+    return new Response(JSON.stringify({ 
+      success: true, 
+      letter: responseData.letter 
+    }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+  } catch (e) {
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: e instanceof Error ? e.message : 'An unexpected error occurred' 
+    }), {
+      status: 400,
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+  } finally {
+    isLoading = false;
+  }
+}
+
+if (!letter) letter = '';
+if (!error) error = '';
+if (!isLoading) isLoading = false;
+---
+
+<Layout title="Love Letter Generator">
+  <div class="background">
+    <div class="hearts"></div>
+  </div>
+  <main class="container">
+    <h1 class="title">
+      <span class="heart-icon">❤️</span>
+      Cupid's Compose
+    </h1>
+
+    <div class="card form-card">
+      <h2 class="card-title">Generate Your Love Note</h2>
+      <form method="POST" class="form" id="letterForm">
+        <div class="form-group">
+          <label for="recipient">Recipient's Name</label>
+          <input type="text" id="recipient" name="recipient" required />
+        </div>
+
+        <div class="form-group">
+          <label for="relationship">Your Relationship</label>
+          <select id="relationship" name="relationship" required>
+            <option value="" disabled selected>Select relationship</option>
+            <option value="partner">Partner</option>
+            <option value="crush">Crush</option>
+            <option value="spouse">Spouse</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="tone">Tone</label>
+          <select id="tone" name="tone" required>
+            <option value="" disabled selected>Select tone</option>
+            <option value="romantic">Romantic</option>
+            <option value="playful">Playful</option>
+            <option value="poetic">Poetic</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="details">Special Details</label>
+          <textarea id="details" name="details" placeholder="Include any special memories or details..."></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn" disabled={isLoading}>
+          <span class="btn-text">{isLoading ? 'Generating...' : 'Generate Love Note'}</span>
+          <span class="btn-icon">💌</span>
+        </button>
+      </form>
+    </div>
+
+    {error && (
+      <div class="error-message">
+        <span>{error}</span>
+      </div>
+    )}
+
+
+    <div class="card letter-card">
+      <h2 class="card-title">Your Love Note</h2>
+      <div class="letter-content">
+        <button class="copy-btn" aria-label="Copy letter to clipboard">
+          <span class="copy-icon">📋</span>
+          <span class="copy-text">Copy</span>
+        </button>
+        <p>{letter}</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('letterForm') as HTMLFormElement;
+      const letterDisplay = document.querySelector('.letter-card') as HTMLElement;
+      const errorDisplay = document.querySelector('.error-message') as HTMLElement;
+      
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          
+          const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+          if (submitButton) {
+            submitButton.disabled = true;
+            if (submitButton.querySelector('.btn-text')) {
+              submitButton.querySelector('.btn-text')!.textContent = 'Generating...';
+            }
+          }
+          
+          // Reset displays
+          if (errorDisplay) errorDisplay.style.display = 'none';
+          if (letterDisplay) letterDisplay.style.display = 'none';
+          
+          const formData = new FormData(form);
+          const jsonData = Object.fromEntries(formData);
+          
+          try {
+            const response = await fetch(window.location.href, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(jsonData),
+            });
+            
+            const responseData = await response.json();
+            
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('Retry-After') || '60';
+              const remainingTime = parseInt(retryAfter, 10);
+              throw new Error(
+                `Too many requests. Please wait ${remainingTime} seconds before trying again.`
+              );
+            }
+            
+            if (!response.ok || !responseData.success) {
+              throw new Error(responseData.error || `Request failed with status ${response.status}`);
+            }
+            
+            if (letterDisplay) {
+              const letterContent = letterDisplay.querySelector('.letter-content p') as HTMLParagraphElement;
+              if (letterContent) {
+                const formattedLetter = responseData.letter
+                  .split('\n')
+                  .filter((line: string) => line.trim() !== '')
+                  .join('\n\n');
+                
+                letterContent.textContent = formattedLetter;
+                letterContent.style.whiteSpace = 'pre-wrap';
+                letterDisplay.style.display = 'block';
+                letterDisplay.scrollIntoView({ behavior: 'smooth' });
+              }
+            }
+            
+          } catch (error) {
+            if (errorDisplay) {
+              errorDisplay.style.display = 'block';
+              const span = errorDisplay.querySelector('span');
+              if (span) {
+                const errorMessage = error instanceof Error ? error.message : 'An error occurred';
+                span.textContent = errorMessage;
+                
+                // Add error styling for rate limit messages
+                if (errorMessage.includes('Too many requests')) {
+                  span.classList.add('rate-limit-error');
+                }
+              }
+            }
+          } finally {
+            if (submitButton) {
+              submitButton.disabled = false;
+              if (submitButton.querySelector('.btn-text')) {
+                submitButton.querySelector('.btn-text')!.textContent = 'Generate Love Letter';
+              }
+            }
+          }
+        });
+      }
+
+      const copyBtn = document.querySelector('.copy-btn');
+      if (copyBtn) {
+        copyBtn.addEventListener('click', async () => {
+          const letterContent = document.querySelector('.letter-content p');
+          if (letterContent) {
+            try {
+              await navigator.clipboard.writeText(letterContent.textContent || '');
+              const copyText = copyBtn.querySelector('.copy-text');
+              if (copyText) {
+                const originalText = copyText.textContent;
+                copyText.textContent = 'Copied!';
+                copyBtn.classList.add('copied');
+                
+                setTimeout(() => {
+                  copyText.textContent = originalText;
+                  copyBtn.classList.remove('copied');
+                }, 2000);
+              }
+            } catch (err) {
+              alert('Failed to copy text');
+            }
+          }
+        });
+      }
+    });
+  </script>
+</Layout>
+
+<style>
+  .background {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg,	#ffb7dd 0%, 	#ffc5e6 100%);
+    z-index: -1;
+    overflow: hidden;
+  }
+
+  .hearts {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: radial-gradient(#ff69b4 1px, transparent 1px);
+    background-size: 50px 50px;
+    opacity: 0.1;
+    animation: heartBeat 2s infinite;
+  }
+
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  .title {
+    font-size: 3rem;
+    text-align: center;
+    color: #d60000;
+    margin-bottom: 2rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+    animation: fadeInDown 1s ease-out;
+  }
+
+  .heart-icon {
+    display: inline-block;
+    margin-right: 0.5rem;
+    animation: pulse 1.5s infinite;
+  }
+
+  .card {
+    background: #ade1eb;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(233, 30, 99, 0.1);
+    padding: 2rem;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(8px);
+    transform-origin: top;
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .form-card {
+    border: 2px solid transparent;
+    transition: border-color 0.3s ease;
+  }
+
+  .form-card:hover {
+    border-color: rgba(233, 30, 99, 0.2);
+  }
+
+  .card-title {
+    font-size: 1.8rem;
+    color: #df4646;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-weight: 600;
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  label {
+    font-size: 1rem;
+    color: #2c3e50;
+    font-weight: 500;
+    transition: color 0.3s ease;
+  }
+
+  .form-group:focus-within label {
+    color: #E91E63;
+  }
+
+  input, select, textarea {
+    padding: 0.75rem;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 1rem;
+    background: white;
+    transition: all 0.3s ease;
+  }
+
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: #E91E63;
+    box-shadow: 0 0 0 3px rgba(233, 30, 99, 0.1);
+  }
+
+  textarea {
+    min-height: 120px;
+    resize: vertical;
+  }
+
+  .submit-btn {
+    background: #E91E63;
+    color: white;
+    border: none;
+    padding: 1rem;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .submit-btn:hover:not(:disabled) {
+    background: #d81557;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 30, 99, 0.2);
+  }
+
+  .submit-btn:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .btn-icon {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease;
+  }
+
+  .submit-btn:hover .btn-icon {
+    transform: scale(1.2) rotate(10deg);
+  }
+
+  .letter-card {
+    background: #fff9f0;
+    border: 1px solid #ffe4cc;
+    display: none;
+  }
+
+  .letter-card.visible {
+    display: block !important;
+  }
+
+  .letter-content {
+    font-family: "DM Sans", 'Courier Prime', 'Courier New', monospace;serif;
+    font-weight: 400;
+    font-style: normal;
+    line-height: 1.8;
+    color: #2c3e50;
+    padding: 1.5rem;
+    background: linear-gradient(0deg, #fff9f0 0%, #ffffff 100%);
+    border-radius: 8px;
+    position: relative;
+    white-space: pre-wrap;
+  }
+
+  .letter-content p {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  .letter-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: repeating-linear-gradient(90deg, #ffe4cc 0px, #ffe4cc 4px, transparent 4px, transparent 8px);
+  }
+
+  .error-message {
+    background-color: #fff5f5;
+    border: 1px solid #feb2b2;
+    color: #c53030;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    animation: shake 0.5s ease-in-out;
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.1);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  @keyframes heartBeat {
+    0% {
+      opacity: 0.1;
+    }
+    50% {
+      opacity: 0.15;
+    }
+    100% {
+      opacity: 0.1;
+    }
+  }
+
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-5px);
+    }
+    75% {
+      transform: translateX(5px);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .container {
+      padding: 1rem;
+    }
+
+    .title {
+      font-size: 2rem;
+    }
+
+    .card {
+      padding: 1.5rem;
+    }
+  }
+
+  .letter-content {
+    position: relative; /* For copy button positioning */
+  }
+
+  .copy-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    color: #666;
+    z-index: 1;
+  }
+
+  .copy-btn:hover {
+    background: #f5f5f5;
+    border-color: #ccc;
+  }
+
+  .copy-btn.copied {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+  }
+
+  .copy-icon {
+    font-size: 1.1em;
+  }
+
+  .copy-text {
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  @media (max-width: 640px) {
+    .copy-btn {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.8rem;
+    }
+  }
+</style>
